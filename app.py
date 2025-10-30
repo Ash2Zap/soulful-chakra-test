@@ -3,12 +3,25 @@ from fpdf import FPDF
 import datetime
 import os
 import requests
+import re
 
 st.set_page_config(
     page_title="Soulful Chakra & Behaviour Profiler",
     page_icon="🪬",
     layout="centered"
 )
+
+# -------------------------------------------------------------------
+# TEXT SANITIZER FOR PDF
+# -------------------------------------------------------------------
+def clean(txt: str) -> str:
+    if txt is None:
+        return ""
+    # remove emojis / non-latin chars that fpdf can't handle
+    txt = re.sub(r"[^\x00-\xFF]", "", txt)
+    # replace fancy bullet / arrow
+    txt = txt.replace("•", "- ").replace("→", "->").replace("—", "-")
+    return txt
 
 # -------------------------------------------------------------------
 # GLOBAL STYLE
@@ -154,7 +167,7 @@ if "profile" not in st.session_state:
 # HEADER
 # -------------------------------------------------------------------
 st.markdown("<div class='shell'>", unsafe_allow_html=True)
-st.markdown("<div class='title'>🪬 Soulful Chakra & Behaviour Profiler</div>", unsafe_allow_html=True)
+st.markdown("<div class='title'>Soulful Chakra & Behaviour Profiler</div>", unsafe_allow_html=True)
 st.markdown("<div class='sub'>5 parts · 10 questions each · energy + personality · FREE mode</div>", unsafe_allow_html=True)
 st.markdown("</div>", unsafe_allow_html=True)
 
@@ -177,7 +190,7 @@ st.session_state["email"] = email
 st.markdown(f"### Part {st.session_state.page} of {TOTAL_PAGES}")
 
 # -------------------------------------------------------------------
-# SHOW QUESTIONS FOR CURRENT PAGE
+# SHOW QUESTIONS
 # -------------------------------------------------------------------
 start_idx = (st.session_state.page - 1) * QUESTIONS_PER_PAGE
 end_idx = start_idx + QUESTIONS_PER_PAGE
@@ -198,11 +211,11 @@ for i, (qtext, impact) in enumerate(current_questions, start=start_idx + 1):
     st.markdown("<hr>", unsafe_allow_html=True)
 
 # -------------------------------------------------------------------
-# NAVIGATION (using st.rerun)
+# NAVIGATION
 # -------------------------------------------------------------------
 col_prev, col_next = st.columns(2)
 go_prev = col_prev.button("⬅️ Back", use_container_width=True)
-go_next = col_next.button("Next ➡️" if st.session_state.page < TOTAL_PAGES else "✨ Generate Report", use_container_width=True)
+go_next = col_next.button("Next ➡️" if st.session_state.page < TOTAL_PAGES else "Generate Report", use_container_width=True)
 
 if go_prev and st.session_state.page > 1:
     st.session_state.page -= 1
@@ -213,7 +226,7 @@ if go_next:
         st.session_state.page += 1
         st.rerun()
     else:
-        # LAST PAGE → compute report
+        # generate report data
         st.session_state.scores = {
             "Root": 5, "Sacral": 5, "Solar": 5,
             "Heart": 5, "Throat": 5, "Third Eye": 5, "Crown": 5
@@ -225,6 +238,7 @@ if go_next:
                     st.session_state.scores[chakra] += delta
                 elif ans == "Sometimes":
                     st.session_state.scores[chakra] += (delta * 0.5)
+
         scores = st.session_state.scores
         avg_score = sum(scores.values()) / len(scores)
         lowest = sorted(scores.items(), key=lambda x: x[1])[:3]
@@ -286,115 +300,134 @@ def create_pdf(profile: dict) -> bytes:
     pdf.add_page()
     pdf.set_auto_page_break(auto=True, margin=15)
 
+    # top bar & side bar
     pdf.set_fill_color(139, 92, 246)
     pdf.rect(0, 0, 210, 18, "F")
     pdf.set_fill_color(236, 72, 153)
     pdf.rect(0, 18, 6, 279, "F")
 
+    # logo
     if os.path.exists(LOGO_PATH):
         pdf.image(LOGO_PATH, x=10, y=2, w=18)
 
+    # title
     pdf.set_text_color(255, 255, 255)
     pdf.set_xy(32, 4)
     pdf.set_font("Arial", "B", 15)
-    pdf.cell(0, 8, "Soulful Chakra & Behaviour Report", ln=True)
+    pdf.cell(0, 8, clean("Soulful Chakra & Behaviour Report"), ln=True)
 
+    # info
     pdf.set_text_color(0, 0, 0)
     pdf.ln(15)
     pdf.set_font("Arial", "", 11)
-    pdf.cell(0, 7, f"Name: {profile['name']}", ln=True)
-    pdf.cell(0, 7, f"Gender: {profile['gender']}", ln=True)
+    pdf.cell(0, 7, clean(f"Name: {profile['name']}"), ln=True)
+    pdf.cell(0, 7, clean(f"Gender: {profile['gender']}"), ln=True)
     if profile.get("email"):
-        pdf.cell(0, 7, f"Email: {profile['email']}", ln=True)
-    pdf.cell(0, 7, f"Generated at: {profile['generated_at']}", ln=True)
+        pdf.cell(0, 7, clean(f"Email: {profile['email']}"), ln=True)
+    pdf.cell(0, 7, clean(f"Generated at: {profile['generated_at']}"), ln=True)
     pdf.ln(3)
 
+    # chakra overview
     pdf.set_font("Arial", "B", 13)
-    pdf.cell(0, 7, "1. Chakra Overview", ln=True)
+    pdf.cell(0, 7, clean("1. Chakra Overview"), ln=True)
     pdf.set_font("Arial", "", 11)
-    pdf.cell(0, 6, f"Average Chakra Balance: {profile['avg_score']:.1f} / 10", ln=True)
+    pdf.cell(0, 6, clean(f"Average Chakra Balance: {profile['avg_score']:.1f} / 10"), ln=True)
     pdf.ln(2)
     for ch, val in profile["scores"].items():
-        pdf.cell(0, 6, f"• {ch}: {val}/10", ln=True)
+        pdf.cell(0, 6, clean(f"- {ch}: {val}/10"), ln=True)
 
+    # lowest
     pdf.ln(3)
     pdf.set_font("Arial", "B", 12)
-    pdf.cell(0, 6, "Chakras asking for attention:", ln=True)
+    pdf.cell(0, 6, clean("Chakras asking for attention:"), ln=True)
     pdf.set_font("Arial", "", 11)
     for ch, v in profile["lowest"]:
-        pdf.cell(0, 6, f"- {ch} → {v}/10", ln=True)
+        pdf.cell(0, 6, clean(f"- {ch} -> {v}/10"), ln=True)
 
+    # personality
     pdf.ln(3)
     pdf.set_font("Arial", "B", 13)
-    pdf.cell(0, 7, "2. Soulful Personality (9-type)", ln=True)
+    pdf.cell(0, 7, clean("2. Soulful Personality (9-type)"), ln=True)
     pdf.set_font("Arial", "", 11)
-    pdf.multi_cell(0, 6, f"You are showing signs of: {profile['personality']}")
+    pdf.multi_cell(0, 6, clean(f"You are showing signs of: {profile['personality']}"))
     personality_desc = {
-        "1. The Nurturer Queen": "Heart-first, gives more than receives. Needs boundaries & receiving.",
-        "2. The Vision Queen": "Intuitive, future-led. Needs grounding & implementation.",
+        "1. The Nurturer Queen": "Heart-first, gives more than receives. Needs boundaries and receiving.",
+        "2. The Vision Queen": "Intuitive, future-led. Needs grounding and implementation.",
         "3. The Action Builder": "Gets things done. Needs feminine rest.",
         "4. The Safety Seeker": "Needs stability before expression. Heal root, money, parents.",
-        "5. The Expressor": "Truth-first. Heal heart + throat to speak with love.",
-        "6. The Harmony Keeper": "Avoids conflict. Needs throat + solar.",
+        "5. The Expressor": "Truth-first. Heal heart and throat to speak with love.",
+        "6. The Harmony Keeper": "Avoids conflict. Needs throat and solar.",
         "7. The Mystic": "Spiritual, needs body anchoring.",
         "8. The Boss Creator": "Leader, needs softness.",
         "9. The Lover-Healer": "Absorbs emotions. Needs sacral cleanse.",
     }
     if profile["personality"] in personality_desc:
-        pdf.multi_cell(0, 6, personality_desc[profile["personality"]])
+        pdf.multi_cell(0, 6, clean(personality_desc[profile["personality"]]))
 
+    # communication
     pdf.ln(3)
     pdf.set_font("Arial", "B", 12)
-    pdf.cell(0, 6, "3. How to coach / talk to you", ln=True)
+    pdf.cell(0, 6, clean("3. How to coach / talk to you"), ln=True)
     pdf.set_font("Arial", "", 11)
     if profile["gender"] == "Female":
-        pdf.multi_cell(0, 6, "• Start with emotion → then give action.\n• Don't give 10 tasks.\n• Add feminine ritual.")
+        pdf.multi_cell(0, 6, clean("Start with emotion, then give action. Do not give 10 tasks. Add feminine ritual."))
     elif profile["gender"] == "Male":
-        pdf.multi_cell(0, 6, "• Be direct but kind.\n• Give ownership steps.\n• Invite heart/sacral opening.")
+        pdf.multi_cell(0, 6, clean("Be direct but kind. Give ownership steps. Invite heart or sacral opening."))
     else:
-        pdf.multi_cell(0, 6, "• Create safety first.\n• Allow expression.\n• Then give structure.")
+        pdf.multi_cell(0, 6, clean("Create safety first. Allow expression. Then give structure."))
 
+    # real need
     pdf.ln(3)
     pdf.set_font("Arial", "B", 12)
-    pdf.cell(0, 6, "4. Your Real Need Right Now", ln=True)
+    pdf.cell(0, 6, clean("4. Your Real Need Right Now"), ln=True)
     pdf.set_font("Arial", "", 11)
-    pdf.multi_cell(0, 6, profile["real_need"])
+    pdf.multi_cell(0, 6, clean(profile["real_need"]))
 
+    # prescription
     pdf.ln(3)
     pdf.set_font("Arial", "B", 12)
-    pdf.cell(0, 6, "5. Soulful Prescription (3 days)", ln=True)
+    pdf.cell(0, 6, clean("5. Soulful Prescription (3 days)"), ln=True)
     pdf.set_font("Arial", "", 11)
     pdf.multi_cell(
         0,
         6,
-        "Day 1 – Reflect: journal earliest memory of today's pain.\n"
-        "Day 2 – Rewire: Ho’oponopono 108x on person/situation.\n"
-        "Day 3 – Rise: 1 bold aligned action (money / relationship / visibility)."
+        clean(
+            "Day 1 - Reflect: journal earliest memory of today's pain.\n"
+            "Day 2 - Rewire: Ho’oponopono 108x on person or situation.\n"
+            "Day 3 - Rise: 1 bold aligned action (money, relationship, visibility)."
+        )
     )
 
+    # footer
     pdf.ln(3)
     pdf.set_font("Arial", "I", 9)
-    pdf.multi_cell(0, 5, "Soulful Academy · What You Seek Is Seeking You · Report auto-generated.")
-    return pdf.output(dest="S").encode("latin-1")
+    pdf.multi_cell(0, 5, clean("Soulful Academy · What You Seek Is Seeking You · Auto-generated report."))
+
+    # IMPORTANT: ignore non-latin chars
+    return pdf.output(dest="S").encode("latin-1", "ignore")
 
 # -------------------------------------------------------------------
 # SHOW RESULT
 # -------------------------------------------------------------------
 if st.session_state.submitted and st.session_state.profile:
     st.success("Report is ready ✅ Scroll down to download.")
-    pdf_bytes = create_pdf(st.session_state.profile)
+    try:
+        pdf_bytes = create_pdf(st.session_state.profile)
 
-    st.markdown("<div class='download-btn'>", unsafe_allow_html=True)
-    st.download_button(
-        label="🌈 Download Your Chakra Report (PDF)",
-        data=pdf_bytes,
-        file_name=f"{st.session_state.profile['name']}_chakra_report.pdf",
-        mime="application/pdf",
-        use_container_width=True
-    )
-    st.markdown("</div>", unsafe_allow_html=True)
+        st.markdown("<div class='download-btn'>", unsafe_allow_html=True)
+        st.download_button(
+            label="Download Your Chakra Report (PDF)",
+            data=pdf_bytes,
+            file_name=f"{st.session_state.profile['name']}_chakra_report.pdf",
+            mime="application/pdf",
+            use_container_width=True
+        )
+        st.markdown("</div>", unsafe_allow_html=True)
+    except Exception as e:
+        st.error("PDF could not be generated. Please try again or simplify the text.")
+        st.code(str(e))
 
     st.markdown("<div class='email-btn'>", unsafe_allow_html=True)
-    if st.button("📧 Send to Email (connect SMTP later)", use_container_width=True):
+    if st.button("Send to Email (connect SMTP later)", use_container_width=True):
         st.info("In deployed version: connect SendGrid / Gmail API to email this report automatically.")
     st.markdown("</div>", unsafe_allow_html=True)
