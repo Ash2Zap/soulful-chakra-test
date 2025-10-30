@@ -131,7 +131,7 @@ QUESTIONS = [
 
 TOTAL_QUESTIONS = len(QUESTIONS)
 QUESTIONS_PER_PAGE = 10
-TOTAL_PAGES = TOTAL_QUESTIONS // QUESTIONS_PER_PAGE  # 5 pages
+TOTAL_PAGES = TOTAL_QUESTIONS // QUESTIONS_PER_PAGE  # 5
 
 # -------------------------------------------------------------------
 # STATE
@@ -177,7 +177,7 @@ st.session_state["email"] = email
 st.markdown(f"### Part {st.session_state.page} of {TOTAL_PAGES}")
 
 # -------------------------------------------------------------------
-# QUESTIONS FOR CURRENT PAGE
+# SHOW QUESTIONS FOR CURRENT PAGE
 # -------------------------------------------------------------------
 start_idx = (st.session_state.page - 1) * QUESTIONS_PER_PAGE
 end_idx = start_idx + QUESTIONS_PER_PAGE
@@ -185,7 +185,7 @@ current_questions = QUESTIONS[start_idx:end_idx]
 
 for i, (qtext, impact) in enumerate(current_questions, start=start_idx + 1):
     ans_key = f"q_{i}"
-    prev_val = st.session_state.answers.get(i, "Sometimes")  # default to middle
+    prev_val = st.session_state.answers.get(i, "Sometimes")
     st.markdown(f"#### {i}. {qtext}")
     ans = st.radio(
         "",
@@ -198,7 +198,7 @@ for i, (qtext, impact) in enumerate(current_questions, start=start_idx + 1):
     st.markdown("<hr>", unsafe_allow_html=True)
 
 # -------------------------------------------------------------------
-# NAVIGATION (fixed double-click)
+# NAVIGATION (using st.rerun)
 # -------------------------------------------------------------------
 col_prev, col_next = st.columns(2)
 go_prev = col_prev.button("⬅️ Back", use_container_width=True)
@@ -206,15 +206,14 @@ go_next = col_next.button("Next ➡️" if st.session_state.page < TOTAL_PAGES e
 
 if go_prev and st.session_state.page > 1:
     st.session_state.page -= 1
-    st.experimental_rerun()
+    st.rerun()
 
 if go_next:
-    # if not on last page -> go next
     if st.session_state.page < TOTAL_PAGES:
         st.session_state.page += 1
-        st.experimental_rerun()
+        st.rerun()
     else:
-        # LAST PAGE: calculate report
+        # LAST PAGE → compute report
         st.session_state.scores = {
             "Root": 5, "Sacral": 5, "Solar": 5,
             "Heart": 5, "Throat": 5, "Third Eye": 5, "Crown": 5
@@ -265,7 +264,7 @@ if go_next:
             "generated_at": datetime.datetime.now().strftime("%d-%m-%Y %H:%M"),
         }
         st.session_state.submitted = True
-        st.experimental_rerun()
+        st.rerun()
 
 # -------------------------------------------------------------------
 # PDF CREATOR
@@ -274,7 +273,6 @@ def create_pdf(profile: dict) -> bytes:
     LOGO_URL = "https://ik.imagekit.io/86edsgbur/Untitled%20design%20(73)%20(3)%20(1).jpg?updatedAt=1759258123716"
     LOGO_PATH = "soulful_logo.jpg"
 
-    # download logo once
     if not os.path.exists(LOGO_PATH):
         try:
             resp = requests.get(LOGO_URL, timeout=10)
@@ -288,23 +286,19 @@ def create_pdf(profile: dict) -> bytes:
     pdf.add_page()
     pdf.set_auto_page_break(auto=True, margin=15)
 
-    # chakra frame
-    pdf.set_fill_color(139, 92, 246)  # purple top bar
+    pdf.set_fill_color(139, 92, 246)
     pdf.rect(0, 0, 210, 18, "F")
-    pdf.set_fill_color(236, 72, 153)  # pink left strip
+    pdf.set_fill_color(236, 72, 153)
     pdf.rect(0, 18, 6, 279, "F")
 
-    # logo
     if os.path.exists(LOGO_PATH):
         pdf.image(LOGO_PATH, x=10, y=2, w=18)
 
-    # title
     pdf.set_text_color(255, 255, 255)
     pdf.set_xy(32, 4)
     pdf.set_font("Arial", "B", 15)
     pdf.cell(0, 8, "Soulful Chakra & Behaviour Report", ln=True)
 
-    # body
     pdf.set_text_color(0, 0, 0)
     pdf.ln(15)
     pdf.set_font("Arial", "", 11)
@@ -315,7 +309,6 @@ def create_pdf(profile: dict) -> bytes:
     pdf.cell(0, 7, f"Generated at: {profile['generated_at']}", ln=True)
     pdf.ln(3)
 
-    # chakra overview
     pdf.set_font("Arial", "B", 13)
     pdf.cell(0, 7, "1. Chakra Overview", ln=True)
     pdf.set_font("Arial", "", 11)
@@ -324,7 +317,6 @@ def create_pdf(profile: dict) -> bytes:
     for ch, val in profile["scores"].items():
         pdf.cell(0, 6, f"• {ch}: {val}/10", ln=True)
 
-    # lowest
     pdf.ln(3)
     pdf.set_font("Arial", "B", 12)
     pdf.cell(0, 6, "Chakras asking for attention:", ln=True)
@@ -332,7 +324,6 @@ def create_pdf(profile: dict) -> bytes:
     for ch, v in profile["lowest"]:
         pdf.cell(0, 6, f"- {ch} → {v}/10", ln=True)
 
-    # personality
     pdf.ln(3)
     pdf.set_font("Arial", "B", 13)
     pdf.cell(0, 7, "2. Soulful Personality (9-type)", ln=True)
@@ -352,7 +343,6 @@ def create_pdf(profile: dict) -> bytes:
     if profile["personality"] in personality_desc:
         pdf.multi_cell(0, 6, personality_desc[profile["personality"]])
 
-    # how to coach
     pdf.ln(3)
     pdf.set_font("Arial", "B", 12)
     pdf.cell(0, 6, "3. How to coach / talk to you", ln=True)
@@ -364,14 +354,12 @@ def create_pdf(profile: dict) -> bytes:
     else:
         pdf.multi_cell(0, 6, "• Create safety first.\n• Allow expression.\n• Then give structure.")
 
-    # real need
     pdf.ln(3)
     pdf.set_font("Arial", "B", 12)
     pdf.cell(0, 6, "4. Your Real Need Right Now", ln=True)
     pdf.set_font("Arial", "", 11)
     pdf.multi_cell(0, 6, profile["real_need"])
 
-    # prescription
     pdf.ln(3)
     pdf.set_font("Arial", "B", 12)
     pdf.cell(0, 6, "5. Soulful Prescription (3 days)", ln=True)
@@ -384,7 +372,6 @@ def create_pdf(profile: dict) -> bytes:
         "Day 3 – Rise: 1 bold aligned action (money / relationship / visibility)."
     )
 
-    # footer
     pdf.ln(3)
     pdf.set_font("Arial", "I", 9)
     pdf.multi_cell(0, 5, "Soulful Academy · What You Seek Is Seeking You · Report auto-generated.")
