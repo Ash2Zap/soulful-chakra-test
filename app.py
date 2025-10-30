@@ -51,7 +51,6 @@ st.markdown(
         border: 1px solid rgba(255,255,255,0.3) !important;
         border-radius: 999px !important;
     }
-    /* radios */
     div[role='radiogroup'] {
         gap: 1.5rem !important;
         margin-bottom: 0.3rem !important;
@@ -132,7 +131,7 @@ QUESTIONS = [
 
 TOTAL_QUESTIONS = len(QUESTIONS)
 QUESTIONS_PER_PAGE = 10
-TOTAL_PAGES = TOTAL_QUESTIONS // QUESTIONS_PER_PAGE  # 5
+TOTAL_PAGES = TOTAL_QUESTIONS // QUESTIONS_PER_PAGE  # 5 pages
 
 # -------------------------------------------------------------------
 # STATE
@@ -178,7 +177,7 @@ st.session_state["email"] = email
 st.markdown(f"### Part {st.session_state.page} of {TOTAL_PAGES}")
 
 # -------------------------------------------------------------------
-# SHOW QUESTIONS FOR CURRENT PAGE (with radio)
+# QUESTIONS FOR CURRENT PAGE
 # -------------------------------------------------------------------
 start_idx = (st.session_state.page - 1) * QUESTIONS_PER_PAGE
 end_idx = start_idx + QUESTIONS_PER_PAGE
@@ -187,7 +186,6 @@ current_questions = QUESTIONS[start_idx:end_idx]
 for i, (qtext, impact) in enumerate(current_questions, start=start_idx + 1):
     ans_key = f"q_{i}"
     prev_val = st.session_state.answers.get(i, "Sometimes")  # default to middle
-
     st.markdown(f"#### {i}. {qtext}")
     ans = st.radio(
         "",
@@ -200,88 +198,83 @@ for i, (qtext, impact) in enumerate(current_questions, start=start_idx + 1):
     st.markdown("<hr>", unsafe_allow_html=True)
 
 # -------------------------------------------------------------------
-# NAVIGATION
+# NAVIGATION (fixed double-click)
 # -------------------------------------------------------------------
 col_prev, col_next = st.columns(2)
-with col_prev:
-    if st.session_state.page > 1:
-        if st.button("⬅️ Back"):
-            st.session_state.page -= 1
-            st.stop()
+go_prev = col_prev.button("⬅️ Back", use_container_width=True)
+go_next = col_next.button("Next ➡️" if st.session_state.page < TOTAL_PAGES else "✨ Generate Report", use_container_width=True)
 
-with col_next:
+if go_prev and st.session_state.page > 1:
+    st.session_state.page -= 1
+    st.experimental_rerun()
+
+if go_next:
+    # if not on last page -> go next
     if st.session_state.page < TOTAL_PAGES:
-        if st.button("Next ➡️"):
-            st.session_state.page += 1
-            st.stop()
+        st.session_state.page += 1
+        st.experimental_rerun()
     else:
-        # LAST PAGE → GENERATE
-        if st.button("✨ Generate Report"):
-            # reset chakra scores
-            st.session_state.scores = {
-                "Root": 5, "Sacral": 5, "Solar": 5,
-                "Heart": 5, "Throat": 5, "Third Eye": 5, "Crown": 5
-            }
-            # apply answers
-            for idx, (qtext, impact) in enumerate(QUESTIONS, start=1):
-                ans = st.session_state.answers.get(idx, "Sometimes")
-                for chakra, delta in impact.items():
-                    if ans == "Yes":
-                        st.session_state.scores[chakra] += delta
-                    elif ans == "Sometimes":
-                        st.session_state.scores[chakra] += (delta * 0.5)
-                    # "No" → no change
+        # LAST PAGE: calculate report
+        st.session_state.scores = {
+            "Root": 5, "Sacral": 5, "Solar": 5,
+            "Heart": 5, "Throat": 5, "Third Eye": 5, "Crown": 5
+        }
+        for idx, (qtext, impact) in enumerate(QUESTIONS, start=1):
+            ans = st.session_state.answers.get(idx, "Sometimes")
+            for chakra, delta in impact.items():
+                if ans == "Yes":
+                    st.session_state.scores[chakra] += delta
+                elif ans == "Sometimes":
+                    st.session_state.scores[chakra] += (delta * 0.5)
+        scores = st.session_state.scores
+        avg_score = sum(scores.values()) / len(scores)
+        lowest = sorted(scores.items(), key=lambda x: x[1])[:3]
+        primary_low = lowest[0][0]
 
-            scores = st.session_state.scores
-            avg_score = sum(scores.values()) / len(scores)
-            lowest = sorted(scores.items(), key=lambda x: x[1])[:3]
-            primary_low = lowest[0][0]
+        if primary_low == "Root":
+            personality = "4. The Safety Seeker"
+            real_need = "Safety, money trust, support, grounded spirituality."
+        elif primary_low == "Sacral":
+            personality = "9. The Lover-Healer"
+            real_need = "Emotional permission, receiving love without guilt, clearing old love pain."
+        elif primary_low == "Solar":
+            personality = "3. The Action Builder"
+            real_need = "Power activation, self-worth, visibility without guilt."
+        elif primary_low == "Heart":
+            personality = "1. The Nurturer Queen"
+            real_need = "Forgiveness, self-love, balanced giving, being seen."
+        elif primary_low == "Throat":
+            personality = "5. The Expressor"
+            real_need = "Voice, boundaries, safe expression, softer communication."
+        elif primary_low == "Third Eye":
+            personality = "2. The Vision Queen"
+            real_need = "Mental calm, clarity, trust in guidance."
+        else:
+            personality = "7. The Mystic"
+            real_need = "Surrender, faith, letting the divine lead, but staying grounded."
 
-            # personality + real need
-            if primary_low == "Root":
-                personality = "4. The Safety Seeker"
-                real_need = "Safety, money trust, support, grounded spirituality."
-            elif primary_low == "Sacral":
-                personality = "9. The Lover-Healer"
-                real_need = "Emotional permission, receiving love without guilt, clearing old love pain."
-            elif primary_low == "Solar":
-                personality = "3. The Action Builder"
-                real_need = "Power activation, self-worth, visibility without guilt."
-            elif primary_low == "Heart":
-                personality = "1. The Nurturer Queen"
-                real_need = "Forgiveness, self-love, balanced giving, being seen."
-            elif primary_low == "Throat":
-                personality = "5. The Expressor"
-                real_need = "Voice, boundaries, safe expression, softer communication."
-            elif primary_low == "Third Eye":
-                personality = "2. The Vision Queen"
-                real_need = "Mental calm, clarity, trust in guidance."
-            else:
-                personality = "7. The Mystic"
-                real_need = "Surrender, faith, letting the divine lead, but staying grounded."
-
-            st.session_state.profile = {
-                "name": st.session_state.get("name") or "Soulful Being",
-                "gender": st.session_state.get("gender") or "Female",
-                "email": st.session_state.get("email"),
-                "scores": scores,
-                "avg_score": avg_score,
-                "lowest": lowest,
-                "personality": personality,
-                "real_need": real_need,
-                "generated_at": datetime.datetime.now().strftime("%d-%m-%Y %H:%M"),
-            }
-            st.session_state.submitted = True
-            st.stop()
+        st.session_state.profile = {
+            "name": st.session_state.get("name") or "Soulful Being",
+            "gender": st.session_state.get("gender") or "Female",
+            "email": st.session_state.get("email"),
+            "scores": scores,
+            "avg_score": avg_score,
+            "lowest": lowest,
+            "personality": personality,
+            "real_need": real_need,
+            "generated_at": datetime.datetime.now().strftime("%d-%m-%Y %H:%M"),
+        }
+        st.session_state.submitted = True
+        st.experimental_rerun()
 
 # -------------------------------------------------------------------
-# PDF CREATOR (with your logo)
+# PDF CREATOR
 # -------------------------------------------------------------------
 def create_pdf(profile: dict) -> bytes:
     LOGO_URL = "https://ik.imagekit.io/86edsgbur/Untitled%20design%20(73)%20(3)%20(1).jpg?updatedAt=1759258123716"
     LOGO_PATH = "soulful_logo.jpg"
 
-    # try to download logo once
+    # download logo once
     if not os.path.exists(LOGO_PATH):
         try:
             resp = requests.get(LOGO_URL, timeout=10)
@@ -289,7 +282,7 @@ def create_pdf(profile: dict) -> bytes:
                 with open(LOGO_PATH, "wb") as f:
                     f.write(resp.content)
         except Exception:
-            pass  # ignore download error; we'll just not show the logo
+            pass
 
     pdf = FPDF()
     pdf.add_page()
@@ -311,7 +304,7 @@ def create_pdf(profile: dict) -> bytes:
     pdf.set_font("Arial", "B", 15)
     pdf.cell(0, 8, "Soulful Chakra & Behaviour Report", ln=True)
 
-    # back to text
+    # body
     pdf.set_text_color(0, 0, 0)
     pdf.ln(15)
     pdf.set_font("Arial", "", 11)
@@ -359,7 +352,7 @@ def create_pdf(profile: dict) -> bytes:
     if profile["personality"] in personality_desc:
         pdf.multi_cell(0, 6, personality_desc[profile["personality"]])
 
-    # communication
+    # how to coach
     pdf.ln(3)
     pdf.set_font("Arial", "B", 12)
     pdf.cell(0, 6, "3. How to coach / talk to you", ln=True)
@@ -402,10 +395,8 @@ def create_pdf(profile: dict) -> bytes:
 # -------------------------------------------------------------------
 if st.session_state.submitted and st.session_state.profile:
     st.success("Report is ready ✅ Scroll down to download.")
-
     pdf_bytes = create_pdf(st.session_state.profile)
 
-    # radiant download
     st.markdown("<div class='download-btn'>", unsafe_allow_html=True)
     st.download_button(
         label="🌈 Download Your Chakra Report (PDF)",
@@ -416,8 +407,7 @@ if st.session_state.submitted and st.session_state.profile:
     )
     st.markdown("</div>", unsafe_allow_html=True)
 
-    # email placeholder
     st.markdown("<div class='email-btn'>", unsafe_allow_html=True)
     if st.button("📧 Send to Email (connect SMTP later)", use_container_width=True):
-        st.info("In live version: connect SendGrid / Gmail API → send this PDF to the above email.")
+        st.info("In deployed version: connect SendGrid / Gmail API to email this report automatically.")
     st.markdown("</div>", unsafe_allow_html=True)
